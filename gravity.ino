@@ -1,86 +1,76 @@
 typedef const int PIN;
 
+PIN bottomSensor  = 2;    
+PIN topSensor     = 3;    
+PIN LED_Ready     = 4;
+PIN LED_Not_Ready = 5;
+PIN reset_sw      = 6;    
 
-/////////////////////
-// Pin Definitions //
-/////////////////////
-
-PIN topSensor = 2;    // Switch that detects start of fall
-PIN bottomSensor = 8; // Switch that detects end of fall
-PIN runReset = 13;    // Switch that resets the system
-
-const double distFall = 65; // cm between sensors (or rather, bottom of sphere to bottom sensors)
+const double distance = 90.1; // cm between end sensor and edge of sphere closest to end sensor
 
 void setup() {
   pinMode(topSensor, INPUT_PULLUP);
   pinMode(bottomSensor, INPUT);
-  pinMode(runReset, INPUT_PULLUP);
-
-  Serial.begin(9600); // Start the serial port to output data
-  
-  Serial.println("Setup the hardware and press reset (button @ pin 2) when ready.");
-  Serial.println();
+  pinMode(reset_sw, INPUT_PULLUP);
+  pinMode(LED_Ready, OUTPUT);
+  pinMode(LED_Not_Ready, OUTPUT);
+  Serial.begin(9600);
 }
 
 void loop() {
-  // Wait for reset button to be pressed
-
-  while (digitalRead(runReset)) {}
-  Serial.println("Reset...checking setup");
+  if(!systemReady){
+    digitalWrite(LED_Ready, LOW);
+    digitalWrite(LED_Not_Ready, HIGH);
+  } else {
+    digitalWrite(LED_Ready, HIGH);
+    digitalWrite(LED_Not_Ready, LOW);
+  }
+  while (digitalRead(reset_sw)) {}
+  Serial.println("Reset in progress");
   delay(500);
 
-  // Reset was pressed, so check the setup
+  // Check setup validity
 
-  boolean flagSetup = true; // set this to false if there is a problem
+  bool flagSetup = true;
 
-  Serial.print("Upper sensor is ");
+  Serial.print("topSensor state: ");
   Serial.println(digitalRead(topSensor));
   if (digitalRead(topSensor)) flagSetup = false;
   delay(1000);
 
-  Serial.print("Lower sensor is ");
+  Serial.print("bottomSensor state:");
   Serial.println(digitalRead(bottomSensor));
 
   if (!digitalRead(bottomSensor)) flagSetup = false;
 
-  if (flagSetup) { // The setup is ok, proceed
-
-    Serial.println("Ready, proceed.");
-
-    // wait for the object to leave the upper sensor
-
+  if (flagSetup) {
+    systemReady=true;
+    digitalWrite(LED_Ready, HIGH);
+    digitalWrite(LED_Not_Ready, LOW);
     while (!digitalRead(topSensor)) {}
-
-    // the object left the top sensor, capture the current time
-    double timeDrop = millis();
-
-    // wait for the object to hit the bottom sensor
-
+    // Start time
+    double stime = millis();
     while (digitalRead(bottomSensor)) {}
-
-    // the object hit the bottom sensor, stop the time and calculate the acceleration
-
-    timeDrop = millis() - timeDrop;
-
-    double resultAcc = 20000 * distFall / (timeDrop * timeDrop);
+    // Stop time, calc diff
+    stime = millis() - stime;
+    digitalWrite(LED_Ready, LOW);
+    digitalWrite(LED_Not_Ready, HIGH);
+    // Calc acceleration
+    double acceleration = 20000 * distance / (stime * stime);
 
     Serial.println();
-    Serial.println();
-    Serial.print("Calculated acceleration based on a fall time of ");
-    Serial.print(timeDrop);
+    Serial.println("---------------------------");
+    Serial.print("dt: ");
+    Serial.print(stime);
     Serial.println(" ms");
-    Serial.print("and a drop distance of ");
-    Serial.print(distFall);
-    Serial.println(" cm");
-    Serial.print("is ");
-    Serial.print(resultAcc);
+    Serial.print("a: ");
+    Serial.print(acceleration);
     Serial.println(" m/s^2");
-    Serial.println();
-    Serial.println();
-    Serial.println("Reset the hardware and press reset for another run.");
-    Serial.println();
-  } else { // There is a problem with the setup
-    Serial.println("Check physical setup and press reset.");
+    Serial.println("---------------------------");
+    systemReady=false;
+  } else {
+    systemReady=false;
+    Serial.println("ERROR: CHECK SETUP");
     Serial.println();
   }
 
